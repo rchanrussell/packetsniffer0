@@ -238,7 +238,6 @@ u_char* handle_IP (u_char *args, const struct pcap_pkthdr* pkthdr,
   const struct my_ip* ip;
   u_int length = pkthdr->len;
   u_int hlen, off, version;
-  int i;
   int len;
 
   /* skip past ethernet header */
@@ -306,13 +305,9 @@ void my_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* p
 
 int main(int argc, char **argv)
 {
-  int i;
   char *dev;
   char errbuf[PCAP_ERRBUF_SIZE];
   pcap_t* descr;
-  const u_char *packet;
-  struct pcap_pkthdr hdr; /* pcap.h */
-  struct ether_header *eptr; /* net/ethernet.h */
   struct bpf_program fp; /* hold compiled program */
   bpf_u_int32 maskp; /* subnet mask */
   bpf_u_int32 netp; /* ip */
@@ -323,7 +318,6 @@ int main(int argc, char **argv)
     return 0;
   }
 
-  u_char *ptr; /* print hardware header info */
 
   /* grab device to peak into */
   dev = pcap_lookupdev(errbuf); /* always grabs inactive ones,but code exits without */
