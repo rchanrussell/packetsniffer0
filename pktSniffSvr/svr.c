@@ -8,17 +8,20 @@
 #include <errno.h>
 #include <string.h>
 
+#include <sys/types.h>
+#include <sys/time.h>
+
 #include <pcap.h>
 #include <sys/socket.h>
 #include <signal.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <netinet/udp.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
 #include <netinet/if_ether.h>
 
-#include <sys/types.h>
-#include <sys/time.h>
 /*
 #include <sys/ioctl.h>
 #include <net/bpf.h>
@@ -40,6 +43,12 @@ struct my_ip {
   u_int8_t  ip_p;   /* protocol */
   u_int16_t ip_sum; /* checksum */
   struct in_addr ip_src,ip_dst; /* source and destination addresses */
+};
+
+struct my_icmphdr { /* because netinet/ip_icmp.h has type issues */
+  u_char icmp_type;
+  u_char icmp_code;
+  u_short icmp_cksum;
 };
 
 /*
@@ -80,28 +89,107 @@ u_int16_t handle_ethernet (u_char *args, const struct pcap_pkthdr* pkthdr,
 /* tcp */
 u_char* handle_TCP (u_char *args, const struct pcap_pkthdr* pkthdr,
                    const u_char* packet) {
-  fprintf(stdout,"\n...processing TCP packet\n");
+  const struct tcphdr* tcp;
+  u_int length = pkthdr->len;
+  u_short srcPort;
+  u_short dstPort;
+  tcp_seq seq;
+  tcp_seq ack;
+  u_char flags;
+  u_char hlen;
+
+  /* move past ethernet and IP packet headers */
+  tcp = (struct tcphdr*)(packet + sizeof(struct ether_header) + sizeof(struct my_ip));
+  length -= sizeof(struct ether_header) + sizeof(struct my_ip);
+
+  /* ensure tcp is valid length */
+  if (length < sizeof(struct tcphdr)) {
+    fprintf(stdout,"handle_TCP: truncated TCP packet %d\n", length);
+    return NULL;
+  }
+
+  hlen = tcp->th_off;
+
+  /* check header length */
+  if(hlen < 5) {
+    fprintf(stdout, "handle_TCP: bad-hlen %d\n",hlen);
+  }
+
+  /* process packet */
+  srcPort = ntohs(tcp->th_sport);
+  dstPort = ntohs(tcp->th_dport);
+  seq = ntohl(tcp->th_seq);
+  ack = ntohl(tcp->th_ack);
+  flags = tcp->th_flags;
+
+  fprintf(stdout,"\nTCP: ");
+  fprintf(stdout,"%d %d %x %x %x\n",srcPort,dstPort,
+                 seq,ack,flags);
+
   return NULL;
 }
 
 /* udp */
 u_char* handle_UDP (u_char *args, const struct pcap_pkthdr* pkthdr,
                    const u_char* packet) {
-  fprintf(stdout,"\n...processing UDP packet\n");
+  const struct udphdr* udp;
+  u_int length = pkthdr->len;
+  u_short srcPort;
+  u_short dstPort;
+  u_short pktLen;
+
+  /* move past ethernet and IP packet headers */
+  udp = (struct udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct my_ip));
+  length -= sizeof(struct ether_header) + sizeof(struct my_ip);
+  pktLen = udp->uh_ulen;
+
+  /* ensure udp is valid length */
+  if (length < sizeof(struct udphdr)) {
+    fprintf(stdout,"handle_UDP: truncated UDP packet %d\n", length);
+    return NULL;
+  }
+
+  /* check header length */
+  if(pktLen < sizeof(struct udphdr)) {
+    fprintf(stdout, "handle_UDP: bad-packetlen %d\n",pktLen);
+  }
+
+  /* process packet */
+  srcPort = ntohs(udp->uh_sport);
+  dstPort = ntohs(udp->uh_dport);
+
+  fprintf(stdout,"\nUDP: ");
+  fprintf(stdout,"%d %d %d\n",srcPort,dstPort,pktLen);
+
   return NULL;
+
 }
 
 /* icmp */
 u_char* handle_ICMP (u_char *args, const struct pcap_pkthdr* pkthdr,
                    const u_char* packet) {
-  fprintf(stdout,"\n...processing ICMP packet\n");
-  return NULL;
-}
+  const struct my_icmphdr* icmp;
+  u_int length = pkthdr->len;
+  u_char type;
+  u_char code;
 
-/* igmp */
-u_char* handle_IGMP (u_char *args, const struct pcap_pkthdr* pkthdr,
-                   const u_char* packet) {
-  fprintf(stdout,"\n...processing IGMP packet\n");
+  /* move past ethernet and IP packet headers */
+  icmp = (struct my_icmphdr*)(packet + sizeof(struct ether_header) + sizeof(struct my_ip));
+  length -= sizeof(struct ether_header) + sizeof(struct my_ip);
+
+  /* ensure udp is valid length */
+  if (length < sizeof(struct my_icmphdr)) {
+    fprintf(stdout,"handle_ICMP: truncated ICMP packet %d\n", length);
+    return NULL;
+  }
+
+  /* process packet */
+  type = icmp->icmp_type;
+  code = icmp->icmp_code;
+
+  fprintf(stdout,"\nICMP: ");
+  fprintf(stdout,"%d %d\n",type,code);
+
   return NULL;
 }
 
@@ -114,17 +202,16 @@ u_char* getProtocol (u_int8_t protocol, u_char *args, const struct pcap_pkthdr* 
       handle_ICMP(args,pkthdr,packet);
       break;
     case 2:
-      fprintf(stdout,"(IGMP)");
-      handle_IGMP(args,pkthdr,packet);
+      fprintf(stdout,"(IGMP)\n");
       break;
     case 3:
-      fprintf(stdout,"(GGP)");
+      fprintf(stdout,"(GGP)\n");
       break;
     case 4:
-      fprintf(stdout,"(IPv4enc)");
+      fprintf(stdout,"(IPv4enc)\n");
       break;
     case 5:
-      fprintf(stdout,"(ST)");
+      fprintf(stdout,"(ST)\n");
       break;
     case 6:
       fprintf(stdout,"(TCP)");
@@ -135,10 +222,10 @@ u_char* getProtocol (u_int8_t protocol, u_char *args, const struct pcap_pkthdr* 
       handle_UDP(args,pkthdr,packet);
       break;
     case 41:
-      fprintf(stdout,"(IPv6enc)");
+      fprintf(stdout,"(IPv6enc)\n");
       break;
     case 58:
-      fprintf(stdout,"(IPv6-ICMP)");
+      fprintf(stdout,"(IPv6-ICMP)\n");
     default:
       fprintf(stdout,"(protocol %d)\n", protocol);
   }
@@ -239,7 +326,7 @@ int main(int argc, char **argv)
   u_char *ptr; /* print hardware header info */
 
   /* grab device to peak into */
-  dev = pcap_lookupdev(errbuf);
+  dev = pcap_lookupdev(errbuf); /* always grabs inactive ones,but code exits without */
 
   if (dev == NULL)
   {
@@ -247,7 +334,6 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  printf("Changing dev...\n");
   dev = argv[2];
   printf("DEV: %s\n", dev);
 
@@ -271,7 +357,7 @@ int main(int argc, char **argv)
    *    before you set your card in promiscuous mode!!    
    */
   /* set to permiscuous 1 if monitoring traffic to other machines, 0 for this machine */
-  descr = pcap_open_live(dev,BUFSIZ,1,5000,errbuf);
+  descr = pcap_open_live(dev,BUFSIZ,1,100,errbuf);
 
   if(descr == NULL)
   {
@@ -300,6 +386,7 @@ int main(int argc, char **argv)
 
   fprintf(stdout, "\nDone processing packets\n");
 
+  pcap_close(descr);
   return 0;
 
 }
