@@ -109,9 +109,13 @@ int main(int argc, char **argv)
   const u_char *packet;
   struct pcap_pkthdr hdr; /* pcap.h */
   struct ether_header *eptr; /* net/ethernet.h */
+  struct bpf_program fp; /* hold compiled program */
+  bpf_u_int32 maskp; /* subnet mask */
+  bpf_u_int32 netp; /* ip */
 
-  if(argc != 2) {
-    fprintf(stdout, "Usage: %s numpackets\n", argv[0]);
+  if(argc != 4) {
+    fprintf(stdout, "Usage: %s numpackets device \"filter program\"\n", argv[0]);
+    fprintf(stdout, "agrc %d\n", argc);
     return 0;
   }
 
@@ -127,8 +131,12 @@ int main(int argc, char **argv)
   }
 
   printf("Changing dev...\n");
-  dev = "en1";
+  dev = argv[2];
   printf("DEV: %s\n", dev);
+
+  /* ask pcap for network addr and mask fo device */
+  pcap_lookupnet(dev,&netp,&maskp,errbuf);
+
   /* open device for sniffing */
   /*
    * pcap_t *pcap_open_live(char *device,int snaplen, int prmisc,int to_ms,
@@ -145,8 +153,8 @@ int main(int argc, char **argv)
    *    not!! Be sure you know the rules of the network you are running on
    *    before you set your card in promiscuous mode!!    
    */
-
-  descr = pcap_open_live(dev,BUFSIZ,0,5000,errbuf);
+  /* set to permiscuous 1 if monitoring traffic to other machines, 0 for this machine */
+  descr = pcap_open_live(dev,BUFSIZ,1,5000,errbuf);
 
   if(descr == NULL)
   {
@@ -154,75 +162,26 @@ int main(int argc, char **argv)
     exit(1);
   }
 
-  /* grab packet from descr */
-  /*
-   * u_char *pcap_next(pcap_t *p, struct pcap_pkthdr *h)
-   * pass in descriptor from pcap_open_live and the
-   * allocated struct pcap_pkthdr
-   */
+  /* compile program, passed param, like host www.google.ca */
+  if (pcap_compile(descr,&fp,argv[3],0,netp) == -1) {
+    fprintf(stderr, "Error calling pcap_compile\n");
+    perror("pcap_compile");
+    exit(1);
+  }
+
+  /* set compiled program as filter */
+  if (pcap_setfilter(descr,&fp) == -1) {
+    fprintf(stderr, "Error setting filter\n");
+    perror("pcap_setfilter");
+    exit(1);
+  }
+
   /* call pcap_loop() and pass callback function
    * int pcap_loop(pcap_t *p, int cnt, pcap_handler callback, u_char *user)
    */
   pcap_loop(descr, atoi(argv[1]), my_callback, NULL);
 
   fprintf(stdout, "\nDone processing packets\n");
-
-#if 0
-  packet = pcap_next(descr,&hdr);
-  if (packet == NULL)
-  {
-    printf("Didn't grab packet\n");
-    exit(1);
-  }
-
-  /*
-   * struct pcap_pkthdr {
-   *   struct timeval ts;   time stamp
-   *   bpf_u_int32 caplen;  length of portion present
-   *   bpf_u_int32;         length of packet off wire
-   */
-
-  printf("Grabbed packet of length %d\n", hdr.len);
-  printf("Received at .... %s\n",ctime((const time_t*)&hdr.ts.tv_sec));
-  printf("Ethernet address length is %d\n", ETHER_HDR_LEN);
-
-  /*
-   * ether header
-   */
-  eptr = (struct ether_header *) packet;
-
-  /* check type of packet */
-  if (ntohs (eptr->ether_type) == ETHERTYPE_IP)
-  {
-    printf("Ethernet type hex:%x dec:%d is an IP packet\n",
-            ntohs(eptr->ether_type),
-            ntohs(eptr->ether_type));
-  } else if (ntohs (eptr->ether_type) == ETHERTYPE_ARP)
-  {
-    printf("Ethernet type hex:%x dec:%d is an ARP packet\n",
-            ntohs(eptr->ether_type),
-            ntohs(eptr->ether_type));
-  } else {
-    printf("Ethernet type %x not IP", ntohs(eptr->ether_type));
-    exit(1);
-  }
-  
-  ptr = eptr->ether_dhost;
-  i = ETHER_ADDR_LEN;
-  printf(" Destination Address:  ");
-  do {
-    printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":", *ptr++);
-  }while(--i>0);
-  printf("\n");
-
-  ptr = eptr->ether_shost;
-  i = ETHER_ADDR_LEN;
-  printf(" Source Address:  ");
-  do {
-    printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":", *ptr++);
-  } while(--i>0);
-  printf("\n");
-#endif
 
   return 0;
 
