@@ -25,6 +25,23 @@
 #include <net/if.h>
 */
 
+struct my_ip {
+  u_int8_t  ip_vhl; /* header lenght, version */
+#define IP_V(ip)  (((ip)->ip_vhl & 0xf0) >> 4)
+#define IP_HL(ip) ((ip)->ip_vhl & 0x0f)
+  u_int8_t  ip_tos; /* type of service */
+  u_int16_t ip_len; /* total length */
+  u_int16_t ip_id;  /* identification */
+  u_int16_t ip_off; /* fragment offset field */
+#define IP_DF 0x4000  /* don't fragment flag */
+#define IP_MF 0x2000  /* more fragments flag */
+#define IP_OFFMASK 0x1fff /* mask for fragmenting bits */
+  u_int8_t  ip_ttl; /* time to live */
+  u_int8_t  ip_p;   /* protocol */
+  u_int16_t ip_sum; /* checksum */
+  struct in_addr ip_src,ip_dst; /* source and destination addresses */
+};
+
 /*
  * handle zombie processes after forked processes are complete
  */
@@ -33,71 +50,171 @@ void sigchld_handler(int s)
   while(waitpid(-1, NULL, WNOHANG) > 0);
 }
 
-void my_callback(u_char *useless, const struct pcap_pkthdr* pkthdr, const u_char* packet)
-{
-  //struct pcap_pkthdr hdr; /* pcap.h */
-  struct ether_header *eptr; /* net/ethernet.h */
-  u_char *ptr; /* print hardware header info */
-  int i;
-  static int count = 1;
-  fprintf(stdout, "PktCount: %d \n", count);
-
-  if (packet == NULL)
-  {
-    printf("Didn't grab packet\n");
-    exit(1);
-  }
-
-  /*
-   * struct pcap_pkthdr {
-   *   struct timeval ts;   time stamp
-   *   bpf_u_int32 caplen;  length of portion present
-   *   bpf_u_int32;         length of packet off wire
-   */
-
-  printf("Grabbed packet of length %d\n",pkthdr->len);
-  printf("Received at .... %s\n",ctime((const time_t*)&pkthdr->ts.tv_sec));
-  printf("Ethernet address length is %d\n", ETHER_HDR_LEN);
-
-  /*
-   * ether header
-   */
+u_int16_t handle_ethernet (u_char *args, const struct pcap_pkthdr* pkthdr,
+                           const u_char* packet) {
+  struct ether_header *eptr;
+  /* ethernet header */
   eptr = (struct ether_header *) packet;
+  fprintf(stdout,"ETH: %s",
+          ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
+  fprintf(stdout," %s ",
+          ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
 
-  /* check type of packet */
-  if (ntohs (eptr->ether_type) == ETHERTYPE_IP)
-  {
-    printf("Ethernet type hex:%x dec:%d is an IP packet\n",
-            ntohs(eptr->ether_type),
-            ntohs(eptr->ether_type));
-  } else if (ntohs (eptr->ether_type) == ETHERTYPE_ARP)
-  {
-    printf("Ethernet type hex:%x dec:%d is an ARP packet\n",
-            ntohs(eptr->ether_type),
-            ntohs(eptr->ether_type));
+  /* check if IP packet */
+  if (ntohs (eptr->ether_type) == ETHERTYPE_IP) {
+    fprintf(stdout, "(IP)");
+  } else if (ntohs (eptr->ether_type) == ETHERTYPE_ARP) {
+    fprintf(stdout,"(ARP)");
+  } else if (ntohs (eptr->ether_type) == ETHERTYPE_REVARP) {
+    fprintf(stdout,"(RARP)");
   } else {
-    printf("Ethernet type %x not IP\n", ntohs(eptr->ether_type));
+    fprintf(stdout, "(?)");
     exit(1);
   }
   
-  ptr = eptr->ether_dhost;
-  i = ETHER_ADDR_LEN;
-  printf(" Destination Address:  ");
-  do {
-    printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":", *ptr++);
-  }while(--i>0);
-  printf("\n");
+  fprintf(stdout,"\n");
 
-  ptr = eptr->ether_shost;
-  i = ETHER_ADDR_LEN;
-  printf(" Source Address:  ");
-  do {
-    printf("%s%x",(i == ETHER_ADDR_LEN) ? " " : ":", *ptr++);
-  } while(--i>0);
-  printf("\n");
+  return (ntohs (eptr->ether_type));
+}
 
+/* tcp */
+u_char* handle_TCP (u_char *args, const struct pcap_pkthdr* pkthdr,
+                   const u_char* packet) {
+  fprintf(stdout,"\n...processing TCP packet\n");
+  return NULL;
+}
+
+/* udp */
+u_char* handle_UDP (u_char *args, const struct pcap_pkthdr* pkthdr,
+                   const u_char* packet) {
+  fprintf(stdout,"\n...processing UDP packet\n");
+  return NULL;
+}
+
+/* icmp */
+u_char* handle_ICMP (u_char *args, const struct pcap_pkthdr* pkthdr,
+                   const u_char* packet) {
+  fprintf(stdout,"\n...processing ICMP packet\n");
+  return NULL;
+}
+
+/* igmp */
+u_char* handle_IGMP (u_char *args, const struct pcap_pkthdr* pkthdr,
+                   const u_char* packet) {
+  fprintf(stdout,"\n...processing IGMP packet\n");
+  return NULL;
+}
+
+/* determine which protocol to process */
+u_char* getProtocol (u_int8_t protocol, u_char *args, const struct pcap_pkthdr* pkthdr,
+                     const u_char* packet) {
+  switch(protocol) {
+    case 1:
+      fprintf(stdout,"(ICMP)");
+      handle_ICMP(args,pkthdr,packet);
+      break;
+    case 2:
+      fprintf(stdout,"(IGMP)");
+      handle_IGMP(args,pkthdr,packet);
+      break;
+    case 3:
+      fprintf(stdout,"(GGP)");
+      break;
+    case 4:
+      fprintf(stdout,"(IPv4enc)");
+      break;
+    case 5:
+      fprintf(stdout,"(ST)");
+      break;
+    case 6:
+      fprintf(stdout,"(TCP)");
+      handle_TCP(args,pkthdr,packet);
+      break;
+    case 17:
+      fprintf(stdout,"(UDP)");
+      handle_UDP(args,pkthdr,packet);
+      break;
+    case 41:
+      fprintf(stdout,"(IPv6enc)");
+      break;
+    case 58:
+      fprintf(stdout,"(IPv6-ICMP)");
+    default:
+      fprintf(stdout,"(protocol %d)\n", protocol);
+  }
+  fprintf(stdout,"\n");
+  return NULL;
+}
+
+u_char* handle_IP (u_char *args, const struct pcap_pkthdr* pkthdr,
+                   const u_char* packet) {
+  const struct my_ip* ip;
+  u_int length = pkthdr->len;
+  u_int hlen, off, version;
+  int i;
+  int len;
+
+  /* skip past ethernet header */
+  ip = (struct my_ip*)(packet + sizeof(struct ether_header));
+  length -= sizeof(struct ether_header);
+
+  /* check if packet is of valid length */
+  if (length < sizeof(struct my_ip)) {
+    printf("tuncated IP %d", length);
+    return NULL;
+  }
+
+  len = ntohs(ip->ip_len);
+  hlen = IP_HL(ip);
+  version = IP_V(ip);
+
+  /* check version */
+  if (version != 4) {
+    fprintf(stdout, "Unknown version %d\n", version);
+    return NULL;
+  }
+
+  /* check header length */
+  if (hlen < 5) {
+    fprintf(stdout, "bad-hlen %d\n", hlen);
+  }
+
+  /* see if any bytes missing from packet */
+  if (length < len) {
+    fprintf(stdout,"\n truncated IP - %d bytes missing!\n", len - length);
+  }
+
+  /* check if have first fragment */
+  off = ntohs (ip->ip_off);
+  if ((off & 0x1fff) == 0) /* no 1's in first 13 bites */
+  {
+    /* print SOURCE DESTINATION hlen version len offset */
+    fprintf(stdout, "IP: ");
+    fprintf(stdout, "%s ", inet_ntoa(ip->ip_src));
+    fprintf(stdout, "%s %d %d %d %d ",
+            inet_ntoa(ip->ip_dst),
+            hlen, version, len, off);
+    getProtocol(ip->ip_p,args,pkthdr,packet);
+  }
+
+  return NULL;
+}
+
+
+
+void my_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* packet)
+{
+  u_int16_t type = handle_ethernet(args,pkthdr,packet);
+  if (type == ETHERTYPE_IP) {
+    /* IP packet */
+    handle_IP(args, pkthdr, packet);
+  } else if (type == ETHERTYPE_ARP) {
+    /* ARP packet */
+  
+  } else if (type == ETHERTYPE_REVARP) {
+    /* reverse ARP packet */  
+  }
   fflush(stdout);
-  count++;
 }
 
 int main(int argc, char **argv)
