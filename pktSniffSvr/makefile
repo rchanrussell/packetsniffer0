@@ -23,5 +23,5 @@ $(EXECUTABLE): $(OBJECTS)
 
 
 clean:
-	rm -rf *.o $(EXECUTABLE)
+	rm -rf *.o $(EXECUTABLE) linux
 
