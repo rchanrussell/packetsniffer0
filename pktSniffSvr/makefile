@@ -3,20 +3,20 @@ CC=gcc
 CFLAGS=-c -Wall
 # lpcap for BSD, libpcap-dev for Linux
 CLIBS=-lpcap
-CLINUXLIBS=
+CLINLIBS=-llibpcap-dev
 LDFLAGS=
 SOURCES=svr.c
 OBJECTS=$(SOURCES:.c=.o)
 EXECUTABLE=pktsniffer
 
-linux: $(SOURCES) $(EXECUTABLE)
-	CLINUXLIBS=-llibpcap-dev
-
-
 all: $(SOURCES) $(EXECUTABLE)
 
+
+linux: $(SOURCES) $(OBJECTS)
+	$(CC) $(LDFLAGS) $(CLINLIBS) $(OBJECTS) -o $@
+
 $(EXECUTABLE): $(OBJECTS)
-	$(CC) $(LDFLAGS) $(CLIBS) $(CLINUXLIBS) $(OBJECTS) -o $@
+	$(CC) $(LDFLAGS) $(CLIBS) $(OBJECTS) -o $@
 
 .c.o:
 	$(CC) $(CFLAGS) $< -o $@
