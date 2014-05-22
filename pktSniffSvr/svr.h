@@ -19,21 +19,28 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
-/*
-#ifdef _NETINET_ETHER_H
-#include <netinet/ether.h>
-*/
+
 #ifdef _LINUX_IF_ETHER_H
 #include <linux/if_ether.h>
 #else
 #include <netinet/if_ether.h>
 #endif
 
+#define MY_ETHER_ADDR_LEN 6
+
 /*
  * Structures
  * write own to improve portability
  * mostly are direct copies of BSD
  */
+struct my_ether_header {
+  u_char ether_dhost[MY_ETHER_ADDR_LEN];
+  u_char ether_shost[MY_ETHER_ADDR_LEN];
+  u_short ether_type;
+};
+struct my_ether_addr {
+  u_char octet[MY_ETHER_ADDR_LEN];
+};
 
 struct my_ip {
   u_int8_t  ip_vhl; /* header lenght, version */
@@ -87,6 +94,13 @@ struct my_udphdr {
 /*
  * Function Prototypes 
  */
+
+/*
+ * ether to address
+ */
+char *my_ether_ntoa(const struct my_ether_addr *);
+char *my_ether_ntoa_r(const struct my_ether_addr *n, char *a);
+
 /*
  * Ethernet packet
  */

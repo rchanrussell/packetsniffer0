@@ -89,13 +89,13 @@ int main(int argc, char **argv)
 
 u_int16_t handle_ethernet (u_char *args, const struct pcap_pkthdr* pkthdr,
                            const u_char* packet) {
-  struct ether_header *eptr;
+  struct my_ether_header *eptr;
   /* ethernet header */
-  eptr = (struct ether_header *) packet;
+  eptr = (struct my_ether_header *) packet;
   fprintf(stdout,"ETH: %s",
-          ether_ntoa((const struct ether_addr *)&eptr->ether_shost));
+          my_ether_ntoa((const struct my_ether_addr *)&eptr->ether_shost));
   fprintf(stdout," %s ",
-          ether_ntoa((const struct ether_addr *)&eptr->ether_dhost));
+          my_ether_ntoa((const struct my_ether_addr *)&eptr->ether_dhost));
 
   /* check if IP packet */
   if (ntohs (eptr->ether_type) == ETHERTYPE_IP) {
@@ -127,8 +127,8 @@ u_char* handle_TCP (u_char *args, const struct pcap_pkthdr* pkthdr,
   u_char hlen;
 
   /* move past ethernet and IP packet headers */
-  tcp = (struct my_tcphdr*)(packet + sizeof(struct ether_header) + sizeof(struct my_ip));
-  length -= sizeof(struct ether_header) + sizeof(struct my_ip);
+  tcp = (struct my_tcphdr*)(packet + sizeof(struct my_ether_header) + sizeof(struct my_ip));
+  length -= sizeof(struct my_ether_header) + sizeof(struct my_ip);
 
   /* ensure tcp is valid length */
   if (length < sizeof(struct my_tcphdr)) {
@@ -167,8 +167,8 @@ u_char* handle_UDP (u_char *args, const struct pcap_pkthdr* pkthdr,
   u_short pktLen;
 
   /* move past ethernet and IP packet headers */
-  udp = (struct my_udphdr*)(packet + sizeof(struct ether_header) + sizeof(struct my_ip));
-  length -= sizeof(struct ether_header) + sizeof(struct my_ip);
+  udp = (struct my_udphdr*)(packet + sizeof(struct my_ether_header) + sizeof(struct my_ip));
+  length -= sizeof(struct my_ether_header) + sizeof(struct my_ip);
   pktLen = udp->uh_ulen;
 
   /* ensure udp is valid length */
@@ -202,8 +202,8 @@ u_char* handle_ICMP (u_char *args, const struct pcap_pkthdr* pkthdr,
   u_char code;
 
   /* move past ethernet and IP packet headers */
-  icmp = (struct my_icmphdr*)(packet + sizeof(struct ether_header) + sizeof(struct my_ip));
-  length -= sizeof(struct ether_header) + sizeof(struct my_ip);
+  icmp = (struct my_icmphdr*)(packet + sizeof(struct my_ether_header) + sizeof(struct my_ip));
+  length -= sizeof(struct my_ether_header) + sizeof(struct my_ip);
 
   /* ensure udp is valid length */
   if (length < sizeof(struct my_icmphdr)) {
@@ -269,8 +269,8 @@ u_char* handle_IP (u_char *args, const struct pcap_pkthdr* pkthdr,
   int len;
 
   /* skip past ethernet header */
-  ip = (struct my_ip*)(packet + sizeof(struct ether_header));
-  length -= sizeof(struct ether_header);
+  ip = (struct my_ip*)(packet + sizeof(struct my_ether_header));
+  length -= sizeof(struct my_ether_header);
 
   /* check if packet is of valid length */
   if (length < sizeof(struct my_ip)) {
@@ -328,6 +328,21 @@ void my_callback(u_char *args, const struct pcap_pkthdr* pkthdr, const u_char* p
     /* reverse ARP packet */  
   }
   fflush(stdout);
+}
+
+char * my_ether_ntoa_r(const struct my_ether_addr *n, char *a) {
+  int i;
+  i = sprintf(a, "%02x:%02x:%02x:%02x:%02x:%02x", n->octet[0],
+        n->octet[1], n->octet[2], n->octet[3], n->octet[4], n->octet[5]);
+  if (i < 17) {
+    return (NULL);
+  }
+  return (a);
+}
+
+char * my_ether_ntoa(const struct my_ether_addr *n) {
+  static char a[18];
+  return (my_ether_ntoa_r(n,a));
 }
 
 
