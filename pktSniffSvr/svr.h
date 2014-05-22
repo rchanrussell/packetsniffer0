@@ -15,16 +15,18 @@
 
 #include <pcap.h>
 #include <sys/socket.h>
-#include <signal.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
-
+/*
 #ifdef _NETINET_ETHER_H
 #include <netinet/ether.h>
+*/
+#ifdef _LINUX_IF_ETHER_H
+#include <linux/if_ether.h>
 #else
-#include <net/ethernet.h>
+#include <netinet/if_ether.h>
 #endif
 
 /*
