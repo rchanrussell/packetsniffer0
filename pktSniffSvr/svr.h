@@ -24,7 +24,7 @@
 #ifdef _NETINET_ETHER_H
 #include <netinet/ether.h>
 #else
-#include <netinet/if_ether.h>
+#include <net/ethernet.h>
 #endif
 
 /*
