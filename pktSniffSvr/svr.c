@@ -314,7 +314,9 @@ int main(int argc, char **argv)
 
   if(argc != 4) {
     fprintf(stdout, "Usage: %s numpackets device \"filter program\"\n", argv[0]);
-    fprintf(stdout, "agrc %d\n", argc);
+    fprintf(stdout, "32pkts on Ethernet for port 80 - Ex: %s 32 eth0 \"port 80\"\n",argv[0]);
+    fprintf(stdout, "2pkts on second port from machine ip - Ex: %s 2 en1 \"src 192.168.1.1\"\n",argv[0]);
+    fprintf(stdout, "64pkts on eth0 any port, in or out - Ex: %s 64 eth0 \"ip\"\n",argv[0]);
     return 0;
   }
 
